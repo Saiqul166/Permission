@@ -29,7 +29,6 @@ jobs:
           fi
           mkdir -p extracted
           unzip -o "$ZIP_FILE" -d extracted
-          # Handle single nested folder
           ITEMS=$(ls extracted/ | wc -l)
           INNER=$(ls extracted/)
           if [ "$ITEMS" -eq 1 ] && [ -d "extracted/$INNER" ]; then
@@ -46,22 +45,32 @@ jobs:
       - name: Setup Gradle wrapper (if missing)
         working-directory: project
         run: |
+          echo "=== Checking project files ==="
+          ls -la
+
+          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+            echo "settings.gradle not found — creating minimal one..."
+            APP_NAME=$(basename "$(pwd)")
+            echo "rootProject.name = '$APP_NAME'" > settings.gradle
+            echo "include ':app'" >> settings.gradle
+            cat settings.gradle
+          fi
+
           if [ ! -f "gradlew" ]; then
             echo "gradlew not found — generating wrapper..."
-            # Find gradle build file to confirm this is a valid project
             if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
-              echo "ERROR: No build.gradle found in project root!"
-              echo "Project contents:"
+              echo "ERROR: No root build.gradle found!"
               ls -la
               exit 1
             fi
-            # Install gradle to generate wrapper
             gradle wrapper --gradle-version 8.2 --distribution-type bin
-            echo "Gradle wrapper generated successfully"
+            echo "Gradle wrapper generated"
           else
-            echo "gradlew found, skipping generation"
+            echo "gradlew already exists"
           fi
+
           chmod +x gradlew
+          echo "=== Final project structure ==="
           ls -la
 
       - name: Create local.properties
