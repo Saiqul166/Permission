@@ -24,28 +24,55 @@ jobs:
         run: |
           ZIP_FILE="project.zip"
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "project.zip not found in repo!"
+            echo "ERROR: project.zip not found!"
             exit 1
           fi
-          echo "Found ZIP: $ZIP_FILE"
           mkdir -p extracted
           unzip -o "$ZIP_FILE" -d extracted
-          # Handle nested folder inside ZIP
+          # Handle single nested folder
+          ITEMS=$(ls extracted/ | wc -l)
           INNER=$(ls extracted/)
-          if [ $(ls extracted/ | wc -l) -eq 1 ] && [ -d "extracted/$INNER" ]; then
-            echo "Moving contents from nested folder: $INNER"
+          if [ "$ITEMS" -eq 1 ] && [ -d "extracted/$INNER" ]; then
+            echo "Nested folder detected: $INNER"
+            mkdir -p project
             cp -r extracted/$INNER/. ./project/
           else
+            mkdir -p project
             cp -r extracted/. ./project/
           fi
+          echo "=== Project structure ==="
           ls -la project/
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x project/gradlew
+      - name: Setup Gradle wrapper (if missing)
+        working-directory: project
+        run: |
+          if [ ! -f "gradlew" ]; then
+            echo "gradlew not found — generating wrapper..."
+            # Find gradle build file to confirm this is a valid project
+            if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+              echo "ERROR: No build.gradle found in project root!"
+              echo "Project contents:"
+              ls -la
+              exit 1
+            fi
+            # Install gradle to generate wrapper
+            gradle wrapper --gradle-version 8.2 --distribution-type bin
+            echo "Gradle wrapper generated successfully"
+          else
+            echo "gradlew found, skipping generation"
+          fi
+          chmod +x gradlew
+          ls -la
+
+      - name: Create local.properties
+        working-directory: project
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          cat local.properties
 
       - name: Build Debug APK
         working-directory: project
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
